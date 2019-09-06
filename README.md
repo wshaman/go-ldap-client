@@ -2,6 +2,7 @@
 
 Simple ldap client to authenticate, retrieve basic information and groups for a user.
 
+Please do not use this package, it's just a drop-in replacement for old code
 # Usage
 
 [Go Doc](https://godoc.org/github.com/jtblin/go-ldap-client)

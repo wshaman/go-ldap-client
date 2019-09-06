@@ -158,3 +158,44 @@ func (lc *LDAPClient) GetGroupsOfUser(username string) ([]string, error) {
 	}
 	return groups, nil
 }
+
+// SearchUsers returns the group for a user.
+func (lc *LDAPClient) SearchUsers(namePart string) (bool, []map[string]string, error) {
+	err := lc.Connect()
+	if err != nil {
+		return false, nil, err
+	}
+
+	// First bind with a read only user
+	if lc.BindDN != "" && lc.BindPassword != "" {
+		err := lc.Conn.Bind(lc.BindDN, lc.BindPassword)
+		if err != nil {
+			return false, nil, err
+		}
+	}
+
+	attributes := append(lc.Attributes, "dn")
+	// Search for the given username
+	searchRequest := ldap.NewSearchRequest(
+		lc.Base,
+		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+		fmt.Sprintf(lc.UserFilter, namePart),
+		attributes,
+		nil,
+	)
+
+	sr, err := lc.Conn.Search(searchRequest)
+	if err != nil {
+		return false, nil, err
+	}
+
+	users := make([]map[string]string, len(sr.Entries))
+	for i, v := range sr.Entries {
+		user := map[string]string{}
+		for _, attr := range lc.Attributes {
+			user[attr] = v.GetAttributeValue(attr)
+		}
+		users[i] = user
+	}
+	return true, users, nil
+}
