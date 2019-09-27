@@ -166,21 +166,11 @@ func (lc *LDAPClient) SearchUsers(namePart string) (bool, []map[string]string, e
 		return false, nil, err
 	}
 
-	// First bind with a read only user
-	if lc.BindDN != "" && lc.BindPassword != "" {
-		err := lc.Conn.Bind(lc.BindDN, lc.BindPassword)
-		if err != nil {
-			return false, nil, err
-		}
-	}
-
-	attributes := append(lc.Attributes, "dn")
-	// Search for the given username
 	searchRequest := ldap.NewSearchRequest(
 		lc.Base,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		fmt.Sprintf(lc.UserFilter, namePart),
-		attributes,
+		append(lc.Attributes, "dn"),
 		nil,
 	)
 
