@@ -161,11 +161,20 @@ func (lc *LDAPClient) GetGroupsOfUser(username string) ([]string, error) {
 
 // SearchUsers returns the group for a user.
 func (lc *LDAPClient) SearchUsers(namePart string) (bool, []map[string]string, error) {
+	namePart += "*"
 	err := lc.Connect()
 	if err != nil {
 		return false, nil, err
 	}
+	// First bind with a read only user
+	if lc.BindDN != "" && lc.BindPassword != "" {
+		err := lc.Conn.Bind(lc.BindDN, lc.BindPassword)
+		if err != nil {
+			return false, nil, err
+		}
+	}
 
+	// Search for the given username
 	searchRequest := ldap.NewSearchRequest(
 		lc.Base,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
@@ -174,7 +183,7 @@ func (lc *LDAPClient) SearchUsers(namePart string) (bool, []map[string]string, e
 		nil,
 	)
 
-	sr, err := lc.Conn.Search(searchRequest)
+	sr, err := lc.Conn.SearchWithPaging(searchRequest, 200)
 	if err != nil {
 		return false, nil, err
 	}
