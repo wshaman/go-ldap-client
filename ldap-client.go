@@ -160,7 +160,7 @@ func (lc *LDAPClient) GetGroupsOfUser(username string) ([]string, error) {
 }
 
 // SearchUsers returns the group for a user.
-func (lc *LDAPClient) SearchUsers(namePart string) (bool, []map[string]string, error) {
+func (lc *LDAPClient) SearchUsers(namePart string, pageSize int) (bool, []map[string]string, error) {
 	namePart += "*"
 	err := lc.Connect()
 	if err != nil {
@@ -183,7 +183,7 @@ func (lc *LDAPClient) SearchUsers(namePart string) (bool, []map[string]string, e
 		nil,
 	)
 
-	sr, err := lc.Conn.SearchWithPaging(searchRequest, 200)
+	sr, err := lc.Conn.SearchWithPaging(searchRequest, uint32(pageSize))
 	if err != nil {
 		return false, nil, err
 	}
