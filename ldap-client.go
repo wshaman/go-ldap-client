@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"strings"
 
 	"gopkg.in/ldap.v2"
 )
@@ -25,6 +26,16 @@ type LDAPClient struct {
 	UseSSL             bool
 	SkipTLS            bool
 	ClientCertificates []tls.Certificate // Adding client certificates
+}
+
+type Person struct {
+	DN         string
+	IsActive   bool
+	GivenName  string
+	LastName   string
+	Email      string
+	Manager    string
+	Attributes map[string]string
 }
 
 // Connect connects to the ldap backend.
@@ -160,41 +171,54 @@ func (lc *LDAPClient) GetGroupsOfUser(username string) ([]string, error) {
 }
 
 // SearchUsers returns the group for a user.
-func (lc *LDAPClient) SearchUsers(namePart string, pageSize int) (bool, []map[string]string, error) {
+func (lc *LDAPClient) SearchUsers(namePart string, pageSize int) ([]Person, error) {
 	namePart += "*"
 	err := lc.Connect()
 	if err != nil {
-		return false, nil, err
+		return nil, err
 	}
 	// First bind with a read only user
 	if lc.BindDN != "" && lc.BindPassword != "" {
 		err := lc.Conn.Bind(lc.BindDN, lc.BindPassword)
 		if err != nil {
-			return false, nil, err
+			return nil, err
 		}
 	}
 
+	attributes := append(lc.Attributes, "dn", "manager")
 	// Search for the given username
 	searchRequest := ldap.NewSearchRequest(
 		lc.Base,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		fmt.Sprintf(lc.UserFilter, namePart),
-		append(lc.Attributes, "dn"),
+		attributes,
 		nil,
 	)
 
 	sr, err := lc.Conn.SearchWithPaging(searchRequest, uint32(pageSize))
 	if err != nil {
-		return false, nil, err
+		return nil, err
 	}
 
-	users := make([]map[string]string, len(sr.Entries))
-	for i, v := range sr.Entries {
-		user := map[string]string{}
-		for _, attr := range lc.Attributes {
-			user[attr] = v.GetAttributeValue(attr)
+	users := make([]Person, 0)
+	for _, v := range sr.Entries {
+		user := Person{DN: v.DN,
+			IsActive:   !isDeactivatedUser(v.DN),
+			Attributes: map[string]string{},
 		}
-		users[i] = user
+		for _, attr := range attributes {
+			user.Attributes[attr] = v.GetAttributeValue(attr)
+		}
+		user.LastName = user.Attributes["sn"]
+		user.GivenName = user.Attributes["givenName"]
+		user.Email = user.Attributes["mail"]
+		user.Manager = GetNameFromDN(user.Attributes["manager"])
+		users = append(users, user)
 	}
-	return true, users, nil
+	return users, nil
+}
+
+//Thank you, Trevor!
+func isDeactivatedUser(dn string) bool {
+	return strings.Contains(dn, "Deprovisioned") || strings.Contains(dn, "OU=Disabled Users")
 }
