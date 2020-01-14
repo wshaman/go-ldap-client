@@ -32,7 +32,7 @@ func main() {
 	if err := c.Connect(); err != nil {
 		panic(err)
 	}
-	r, err := c.SearchUsers("", 500)
+	r, err := c.SearchUsers("*myname.mylastna*", 500)
 	if err != nil {
 		panic(err)
 	}
