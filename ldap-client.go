@@ -29,13 +29,14 @@ type LDAPClient struct {
 }
 
 type Person struct {
-	DN         string
-	IsActive   bool
-	GivenName  string
-	LastName   string
-	Email      string
-	Manager    string
-	Attributes map[string]string
+	DN                string
+	IsActive          bool
+	GivenName         string
+	LastName          string
+	Email             string
+	Manager           string
+	Attributes        map[string]string
+	OrganisationUnits []string
 }
 
 // Connect connects to the ldap backend.
@@ -212,6 +213,7 @@ func (lc *LDAPClient) SearchUsers(namePart string, pageSize int) ([]Person, erro
 		user.GivenName = user.Attributes["givenName"]
 		user.Email = user.Attributes["mail"]
 		user.Manager = GetNameFromDN(user.Attributes["manager"])
+		user.OrganisationUnits = GetOrgUnits(v.DN)
 		users = append(users, user)
 	}
 	return users, nil
