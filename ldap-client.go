@@ -11,7 +11,7 @@ import (
 	"gopkg.in/ldap.v2"
 )
 
-type LDAPClient struct {
+type Client struct {
 	Attributes         []string
 	Base               string
 	BindDN             string
@@ -34,14 +34,30 @@ type Person struct {
 	GivenName         string
 	LastName          string
 	Email             string
+	Title             string
 	Manager           string
 	Attributes        map[string]string
 	OrganisationUnits []string
 }
 
+func (lc *Client) addDefaultAttributes() {
+	def := []string{"dn", "givenName", "sn", "mail", "title"}
+	exists := map[string]bool{}
+	for _, v := range lc.Attributes {
+		exists[v] = true
+	}
+	for _, v := range def {
+		if _, ok := exists[v]; ok {
+			continue
+		}
+		lc.Attributes = append(lc.Attributes, v)
+	}
+}
+
 // Connect connects to the ldap backend.
-func (lc *LDAPClient) Connect() error {
+func (lc *Client) Connect() error {
 	if lc.Conn == nil {
+		lc.addDefaultAttributes()
 		var l *ldap.Conn
 		var err error
 		address := fmt.Sprintf("%s:%d", lc.Host, lc.Port)
@@ -78,7 +94,7 @@ func (lc *LDAPClient) Connect() error {
 }
 
 // Close closes the ldap backend connection.
-func (lc *LDAPClient) Close() {
+func (lc *Client) Close() {
 	if lc.Conn != nil {
 		lc.Conn.Close()
 		lc.Conn = nil
@@ -86,7 +102,7 @@ func (lc *LDAPClient) Close() {
 }
 
 // Authenticate authenticates the user against the ldap backend.
-func (lc *LDAPClient) Authenticate(username, password string) (bool, map[string]string, error) {
+func (lc *Client) Authenticate(username, password string) (bool, *Person, error) {
 	err := lc.Connect()
 	if err != nil {
 		return false, nil, err
@@ -124,30 +140,27 @@ func (lc *LDAPClient) Authenticate(username, password string) (bool, map[string]
 	}
 
 	userDN := sr.Entries[0].DN
-	user := map[string]string{}
-	for _, attr := range lc.Attributes {
-		user[attr] = sr.Entries[0].GetAttributeValue(attr)
-	}
+	user := personFromSearchEntry(sr.Entries[0], attributes)
 
 	// Bind as the user to verify their password
 	err = lc.Conn.Bind(userDN, password)
 	if err != nil {
-		return false, user, err
+		return false, &user, err
 	}
 
 	// Rebind as the read only user for any further queries
 	if lc.BindDN != "" && lc.BindPassword != "" {
 		err = lc.Conn.Bind(lc.BindDN, lc.BindPassword)
 		if err != nil {
-			return true, user, err
+			return true, &user, err
 		}
 	}
 
-	return true, user, nil
+	return true, &user, nil
 }
 
 // GetGroupsOfUser returns the group for a user.
-func (lc *LDAPClient) GetGroupsOfUser(username string) ([]string, error) {
+func (lc *Client) GetGroupsOfUser(username string) ([]string, error) {
 	err := lc.Connect()
 	if err != nil {
 		return nil, err
@@ -172,7 +185,7 @@ func (lc *LDAPClient) GetGroupsOfUser(username string) ([]string, error) {
 }
 
 // SearchUsers returns the group for a user.
-func (lc *LDAPClient) SearchUsers(namePart string, pageSize int) ([]Person, error) {
+func (lc *Client) SearchUsers(namePart string, pageSize int) ([]Person, error) {
 	err := lc.Connect()
 	if err != nil {
 		return nil, err
@@ -202,21 +215,27 @@ func (lc *LDAPClient) SearchUsers(namePart string, pageSize int) ([]Person, erro
 
 	users := make([]Person, 0)
 	for _, v := range sr.Entries {
-		user := Person{DN: v.DN,
-			IsActive:   !isDeactivatedUser(v.DN),
-			Attributes: map[string]string{},
-		}
-		for _, attr := range attributes {
-			user.Attributes[attr] = v.GetAttributeValue(attr)
-		}
-		user.LastName = user.Attributes["sn"]
-		user.GivenName = user.Attributes["givenName"]
-		user.Email = user.Attributes["mail"]
-		user.Manager = GetNameFromDN(user.Attributes["manager"])
-		user.OrganisationUnits = GetOrgUnits(v.DN)
+		user := personFromSearchEntry(v, attributes)
 		users = append(users, user)
 	}
 	return users, nil
+}
+
+func personFromSearchEntry(v *ldap.Entry, attributes []string) Person {
+	user := Person{DN: v.DN,
+		IsActive:   !isDeactivatedUser(v.DN),
+		Attributes: map[string]string{},
+	}
+	for _, attr := range attributes {
+		user.Attributes[attr] = v.GetAttributeValue(attr)
+	}
+	user.LastName = user.Attributes["sn"]
+	user.GivenName = user.Attributes["givenName"]
+	user.Email = user.Attributes["mail"]
+	user.Title = user.Attributes["title"]
+	user.Manager = GetNameFromDN(user.Attributes["manager"])
+	user.OrganisationUnits = GetOrgUnits(v.DN)
+	return user
 }
 
 //Thank you, Trevor!

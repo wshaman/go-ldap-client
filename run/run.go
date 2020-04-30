@@ -9,8 +9,8 @@ import (
 	"github.com/wshaman/go-ldap-client"
 )
 
-func getClient() *ldap.LDAPClient {
-	client := &ldap.LDAPClient{
+func getClient() *ldap.Client {
+	client := &ldap.Client{
 		Base:               os.Getenv("LDAP_BASE"),
 		Host:               os.Getenv("LDAP_HOST"),
 		BindDN:             os.Getenv("LDAP_USER"),
@@ -35,7 +35,7 @@ func main() {
 	if err := c.Connect(); err != nil {
 		panic(err)
 	}
-	r, err := c.SearchUsers("*", 500)
+	r, err := c.SearchUsers("jacob.lawyer*", 500)
 	if err != nil {
 		panic(err)
 	}
